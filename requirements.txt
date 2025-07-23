@@ -1,0 +1,5 @@
+azure-functions
+yfinance
+pandas
+numpy
+azure-storage-blob
