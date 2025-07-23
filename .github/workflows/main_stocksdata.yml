@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
+  # AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # No longer directly used for package parameter, but can be left for context
   PYTHON_VERSION: '3.12' # set this to the python version to use (supports 3.6, 3.7, 3.8)
 
 jobs:
@@ -39,16 +39,28 @@ jobs:
 
       # Optional: Add step to run tests here
 
+      # --- CRITICAL CHANGE 1: Ensure correct content is zipped ---
       - name: Zip artifact for deployment
-        run: zip release.zip ./* -r
+        # This command creates a zip with the correct structure for Azure Functions
+        # It assumes host.json (if present at root), requirements.txt, and your function folders are at the repository root
+        # If your host.json is NOT at the root, you might need to adjust this.
+        run: |
+          # Create a temporary directory to structure the zip correctly
+          mkdir function_app_package
+          cp requirements.txt function_app_package/
+          # Copy your function folder into the package
+          cp -r stocksdata function_app_package/
+          # If you have a host.json at the root of your repo, copy it:
+          # cp host.json function_app_package/
+          # Now zip the contents of the structured package
+          cd function_app_package
+          zip -r ../release.zip ./*
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            release.zip
-            !venv/
+          path: release.zip # Upload only the specific zip file
 
   deploy:
     runs-on: ubuntu-latest
@@ -59,9 +71,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: python-app
+          path: . # Download to the current directory
 
-      - name: Unzip artifact for deployment
-        run: unzip release.zip     
+      # --- REMOVE THIS STEP: No need to unzip if we deploy the zip directly ---
+      # - name: Unzip artifact for deployment
+      #   run: unzip release.zip            
         
       - name: 'Deploy to Azure Functions'
         uses: Azure/functions-action@v1
@@ -69,5 +83,6 @@ jobs:
         with:
           app-name: 'stocksdata'
           slot-name: 'Production'
-          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          # --- CRITICAL CHANGE 2: Point directly to the zip file ---
+          package: 'release.zip' # Deploy the downloaded zip file directly
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_BBF2DB12F4B248C4B07678EFD2245F63 }}
