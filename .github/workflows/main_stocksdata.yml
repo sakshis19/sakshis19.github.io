@@ -7,17 +7,17 @@ name: Build and deploy Python project to Azure Function App - stocksdata
 on:
   push:
     branches:
-      - main
+      - main # Your Azure Function App is configured to deploy from 'main'
   workflow_dispatch:
 
 env:
-  PYTHON_VERSION: '3.12'
+  PYTHON_VERSION: '3.12' # Azure Functions supports Python 3.12
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read # Required for actions/checkout
 
     steps:
       - name: Checkout repository
@@ -36,18 +36,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # --- CRITICAL CHANGE: This is the most direct way to zip the correct structure ---
-      # This command zips the 'stocksdata' folder and 'requirements.txt' directly from the root of the repo.
-      # If you have a host.json at the repo root, add it to this command.
+      # --- CRITICAL FIX: Ensure host.json is present and zipped from the repo root ---
+      # This command explicitly zips the 'stocksdata' folder, 'requirements.txt',
+      # AND 'host.json' (which is absolutely necessary for Python Functions).
       - name: Zip artifact for deployment
         run: |
-          # Assuming 'stocksdata' folder and 'requirements.txt' are at the root of your repo
-          # And host.json might also be at the root.
-          # If host.json exists at your repo root (STOCKSDATAA/host.json), uncomment the 'host.json' part
-          zip -r release.zip stocksdata requirements.txt # Add host.json here if it exists at repo root: host.json
-          
-          # Example if host.json is at root:
-          # zip -r release.zip stocksdata requirements.txt host.json
+          # IMPORTANT: Confirm 'host.json' exists at the root of your local repository (STOCKSDATAA folder)
+          # alongside 'stocksdata' directory and 'requirements.txt'.
+          # If it does NOT exist locally, you need to create a basic one there first.
+          zip -r release.zip stocksdata requirements.txt host.json
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -57,7 +54,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: build # Ensures the build job completes successfully before deployment starts
     
     steps:
       - name: Download artifact from build job
@@ -70,7 +67,7 @@ jobs:
         uses: Azure/functions-action@v1
         id: deploy-to-function
         with:
-          app-name: 'stocksdata'
+          app-name: 'stocksdata' # Your Function App name
           slot-name: 'Production'
           package: 'release.zip' # Deploy the specific zip file directly
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_BBF2DB12F4B248C4B07678EFD2245F63 }}
